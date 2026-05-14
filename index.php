@@ -382,10 +382,6 @@
                     <label for="btApiKey">API Key</label>
                     <input type="password" id="btApiKey" placeholder="在宝塔面板设置中获取">
                 </div>
-                <div class="form-group">
-                    <label for="btApiSecret">API Secret <span style="color: #999; font-weight: normal;">(可选)</span></label>
-                    <input type="password" id="btApiSecret" placeholder="可不填">
-                </div>
                 <button id="testConnection" class="btn-save" onclick="testBtConnection()">🔗 测试连接</button>
                 <button id="addServer" class="btn-save" onclick="saveServer()" style="background: #28a745;">➕ 添加服务器</button>
             </div>
@@ -468,21 +464,19 @@
             const name = document.getElementById('serverName').value.trim();
             const url = document.getElementById('panelUrl').value.trim();
             const apiKey = document.getElementById('btApiKey').value.trim();
-            const apiSecret = document.getElementById('btApiSecret').value.trim();
 
-            if (!name || !url || !apiKey || !apiSecret) {
-                showToast('请填写完整的服务器信息');
+            if (!name || !url || !apiKey) {
+                showToast('请填写服务器名称、面板地址和API Key');
                 return;
             }
 
-            servers.push({ name, url, apiKey, apiSecret });
+            servers.push({ name, url, apiKey });
             localStorage.setItem('baota_servers', JSON.stringify(servers));
             renderServerList();
 
             document.getElementById('serverName').value = '';
             document.getElementById('panelUrl').value = '';
             document.getElementById('btApiKey').value = '';
-            document.getElementById('btApiSecret').value = '';
 
             showToast('服务器添加成功', 'success');
         }
@@ -490,10 +484,9 @@
         async function testBtConnection() {
             const url = document.getElementById('panelUrl').value.trim();
             const apiKey = document.getElementById('btApiKey').value.trim();
-            const apiSecret = document.getElementById('btApiSecret').value.trim();
 
-            if (!url || !apiKey || !apiSecret) {
-                showToast('请填写完整的服务器信息');
+            if (!url || !apiKey) {
+                showToast('请填写面板地址和API Key');
                 return;
             }
 
@@ -504,8 +497,7 @@
                     body: JSON.stringify({
                         action: 'test_connection',
                         panel_url: url,
-                        api_key: apiKey,
-                        api_secret: apiSecret
+                        api_key: apiKey
                     })
                 });
 
@@ -571,7 +563,6 @@
                         action: 'execute_ai_command',
                         panel_url: server.url,
                         api_key: server.apiKey,
-                        api_secret: server.apiSecret,
                         command: '查看系统状态'
                     })
                 });
@@ -720,7 +711,6 @@
                             action: 'execute_ai_command',
                             panel_url: server.url,
                             api_key: server.apiKey,
-                            api_secret: server.apiSecret,
                             command: userMessage
                         })
                     });
@@ -744,7 +734,6 @@
                             action: 'execute_ai_command',
                             panel_url: server.url,
                             api_key: server.apiKey,
-                            api_secret: server.apiSecret,
                             command: userMessage
                         })
                     });
