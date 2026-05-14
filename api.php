@@ -9,67 +9,139 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['error' => 'Method not allowed']);
-    exit();
-}
+require_once __DIR__ . '/BaoTaAPI.php';
+require_once __DIR__ . '/AICommandParser.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 
-if (empty($input['api_key'])) {
+if (empty($input['action'])) {
     http_response_code(400);
-    echo json_encode(['error' => 'API key is required']);
+    echo json_encode(['error' => 'Action is required']);
     exit();
 }
 
-$apiKey = $input['api_key'];
-$messages = $input['messages'] ?? [];
-$model = $input['model'] ?? 'deepseek-v4-pro';
-$thinking = $input['thinking'] ?? false;
+$action = $input['action'];
 
-if (empty($messages)) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Messages are required']);
-    exit();
+switch ($action) {
+    case 'test_connection':
+        handleTestConnection($input);
+        break;
+
+    case 'execute_ai_command':
+        handleAICommand($input);
+        break;
+
+    case 'get_server_status':
+        handleServerStatus($input);
+        break;
+
+    case 'get_all_info':
+        handleGetAllInfo($input);
+        break;
+
+    case 'direct_api':
+        handleDirectAPI($input);
+        break;
+
+    default:
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid action']);
+        break;
 }
 
-$requestData = [
-    'model' => $model,
-    'messages' => $messages,
-    'stream' => true
-];
+function handleTestConnection($input) {
+    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
+        exit();
+    }
 
-if ($thinking && $model === 'deepseek-v4-pro') {
-    $requestData['thinking'] = ['type' => 'enabled'];
-    $requestData['reasoning_effort'] = 'high';
+    $baota = new BaoTaAPI(
+        $input['panel_url'],
+        $input['api_key'],
+        $input['api_secret']
+    );
+
+    $result = $baota->testConnection();
+    echo json_encode(['success' => $result, 'message' => $result ? '连接成功' : '连接失败']);
 }
 
-$ch = curl_init('https://api.deepseek.com/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => json_encode($requestData),
-    CURLOPT_RETURNTRANSFER => false,
-    CURLOPT_WRITEFUNCTION => function($curl, $data) {
-        echo $data;
-        flush();
-        ob_flush();
-        return strlen($data);
-    },
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . $apiKey
-    ],
-    CURLOPT_TIMEOUT => 120,
-    CURLOPT_HTTP200ALIASES => [200]
-]);
+function handleAICommand($input) {
+    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
+        exit();
+    }
 
-curl_exec($ch);
+    if (empty($input['command'])) {
+        echo json_encode(['success' => false, 'message' => 'Command is required']);
+        exit();
+    }
 
-if (curl_errno($ch)) {
-    $error = curl_error($ch);
-    http_response_code(500);
-    echo json_encode(['error' => 'API request failed: ' . $error]);
+    $baota = new BaoTaAPI(
+        $input['panel_url'],
+        $input['api_key'],
+        $input['api_secret']
+    );
+
+    $parser = new AICommandParser($baota);
+    $result = $parser->parseAndExecute($input['command']);
+
+    echo json_encode($result);
 }
 
-curl_close($ch);
+function handleServerStatus($input) {
+    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
+        exit();
+    }
+
+    $baota = new BaoTaAPI(
+        $input['panel_url'],
+        $input['api_key'],
+        $input['api_secret']
+    );
+
+    $parser = new AICommandParser($baota);
+    $result = $parser->parseAndExecute('查看系统状态');
+
+    echo json_encode($result);
+}
+
+function handleGetAllInfo($input) {
+    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
+        exit();
+    }
+
+    $baota = new BaoTaAPI(
+        $input['panel_url'],
+        $input['api_key'],
+        $input['api_secret']
+    );
+
+    $result = $baota->getAllInfo();
+    echo json_encode(['success' => true, 'data' => $result]);
+}
+
+function handleDirectAPI($input) {
+    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
+        exit();
+    }
+
+    if (empty($input['bt_action'])) {
+        echo json_encode(['success' => false, 'message' => 'BT action is required']);
+        exit();
+    }
+
+    $baota = new BaoTaAPI(
+        $input['panel_url'],
+        $input['api_key'],
+        $input['api_secret']
+    );
+
+    $method = $input['method'] ?? 'POST';
+    $data = $input['data'] ?? [];
+
+    $result = $baota->makeRequest($input['bt_action'], $data, $method);
+    echo json_encode(['success' => true, 'data' => $result]);
+}
