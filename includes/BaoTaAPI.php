@@ -2,12 +2,18 @@
 class BaoTaAPI {
     private $panel_url;
     private $BT_KEY;
-    private $cookies = [];
-    private $last_error;
+    private $cookie_file;
 
     public function __construct($panel_url, $BT_KEY) {
         $this->panel_url = rtrim($panel_url, '/');
         $this->BT_KEY = $BT_KEY;
+        $this->cookie_file = __DIR__ . '/../.cookie_' . md5($this->panel_url);
+        if (!file_exists(dirname($this->cookie_file))) {
+            mkdir(dirname($this->cookie_file), 0755, true);
+        }
+        if (!file_exists($this->cookie_file)) {
+            touch($this->cookie_file);
+        }
     }
 
     private function GetKeyData() {
@@ -20,32 +26,26 @@ class BaoTaAPI {
     }
 
     private function HttpPostCookie($url, $data, $timeout = 60) {
-        $cookie_file = __DIR__ . '/../.cookie_' . md5($this->panel_url);
-        if (!file_exists(dirname($cookie_file))) {
-            mkdir(dirname($cookie_file), 0755, true);
-        }
-        if (!file_exists($cookie_file)) {
-            touch($cookie_file);
-        }
-
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);
         curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
         curl_setopt($ch, CURLOPT_POST, 1);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_file);
-        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_file);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($data));
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $this->cookie_file);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $this->cookie_file);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
         curl_setopt($ch, CURLOPT_HEADER, 0);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+
         $output = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         if (curl_errno($ch)) {
-            $this->last_error = curl_error($ch);
+            $error = curl_error($ch);
             curl_close($ch);
-            return json_encode(['code' => 500, 'msg' => $this->last_error]);
+            return json_encode(['code' => 500, 'msg' => $error]);
         }
 
         curl_close($ch);
@@ -64,18 +64,10 @@ class BaoTaAPI {
         $data = json_decode($result, true);
 
         if ($data === null) {
-            return ['code' => 0, 'msg' => $result, 'raw' => $result];
+            return ['code' => 0, 'msg' => $result];
         }
 
         return $data;
-    }
-
-    public function getLastError() {
-        return $this->last_error;
-    }
-
-    public function getPanelInfo() {
-        return $this->makeRequest('/data?action=getData', ['table' => 'panelInfo']);
     }
 
     public function getSystemTotal() {
@@ -123,7 +115,7 @@ class BaoTaAPI {
         return $this->makeRequest('/site?action=StartSite', ['siteName' => $siteName]);
     }
 
-    public function getDatabaseList($type = 'MySQL') {
+    public function getDatabaseList() {
         return $this->makeRequest('/data?action=getData', ['table' => 'databases']);
     }
 
@@ -143,10 +135,6 @@ class BaoTaAPI {
 
     public function getFilesList($path = '/www/wwwroot') {
         return $this->makeRequest('/files?action=GetFiles', ['path' => $path]);
-    }
-
-    public function createFile($path, $content = '') {
-        return $this->makeRequest('/files?action=CreateFile', ['path' => $path, 'content' => $content]);
     }
 
     public function readFile($path) {
@@ -180,37 +168,8 @@ class BaoTaAPI {
         ]);
     }
 
-    public function getSSLList() {
-        return $this->makeRequest('/ssl?action=get_ssl_list');
-    }
-
-    public function applySSL($domain) {
-        return $this->makeRequest('/acme?action=apply_cert_api', ['domains' => [$domain]]);
-    }
-
     public function getCrontabList() {
         return $this->makeRequest('/crontab?action=get_crontab_list');
-    }
-
-    public function addCrontab($name, $type, $where1, $sname) {
-        return $this->makeRequest('/crontab?action=add_crontab', [
-            'name' => $name,
-            'type' => $type,
-            'where1' => $where1,
-            'sname' => $sname
-        ]);
-    }
-
-    public function deleteCrontab($id) {
-        return $this->makeRequest('/crontab?action=DelCrontab', ['id' => $id]);
-    }
-
-    public function getDockerContainers() {
-        return $this->makeRequest('/docker?action=get_containers');
-    }
-
-    public function getDockerImages() {
-        return $this->makeRequest('/docker?action=get_images');
     }
 
     public function testConnection() {
@@ -218,15 +177,8 @@ class BaoTaAPI {
         return isset($result['cpuRealUsed']);
     }
 
-    public function getAllInfo() {
-        return [
-            'system' => $this->getSystemTotal(),
-            'disk' => $this->getDiskInfo(),
-            'network' => $this->getNetwork(),
-            'sites' => $this->getSites(),
-            'databases' => $this->getDatabaseList(),
-            'php_versions' => $this->getPhpVersion()
-        ];
+    public function makeCustomRequest($action, $data = []) {
+        return $this->makeRequest($action, $data);
     }
 
     private function generatePassword($length = 16) {
@@ -236,9 +188,5 @@ class BaoTaAPI {
             $password .= $chars[mt_rand(0, strlen($chars) - 1)];
         }
         return $password;
-    }
-
-    public function makeCustomRequest($action, $data = []) {
-        return $this->makeRequest($action, $data);
     }
 }
