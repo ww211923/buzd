@@ -177,6 +177,17 @@ class BaoTaAPI {
         return isset($result['cpuRealUsed']);
     }
 
+    public function getAllInfo() {
+        return [
+            'system' => $this->getSystemTotal(),
+            'disk' => $this->getDiskInfo(),
+            'network' => $this->getNetwork(),
+            'sites' => $this->getSites(),
+            'databases' => $this->getDatabaseList(),
+            'php_versions' => $this->getPhpVersion()
+        ];
+    }
+
     public function makeCustomRequest($action, $data = []) {
         return $this->makeRequest($action, $data);
     }

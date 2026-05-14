@@ -1,0 +1,97 @@
+<?php
+header('Content-Type: text/html; charset=utf-8');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>API 测试</title>
+    <style>
+        body { font-family: Arial; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .section { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { color: green; }
+        .error { color: red; }
+        pre { background: #f5f5f5; padding: 10px; border-radius: 5px; overflow-x: auto; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>DeepSeek + 宝塔 API 测试</h1>
+
+    <div class="section">
+        <h2>1. 配置</h2>
+        <p>面板地址: <input type="text" id="panelUrl" value="https://38.207.177.103:35957" style="width:400px;"></p>
+        <p>API Key: <input type="text" id="apiKey" value="BjdFTLZ2jbQ856A4wjl55lnA7uOInsTu" style="width:400px;"></p>
+        <p>测试命令: <input type="text" id="testCommand" value="查看系统状态" style="width:400px;"></p>
+    </div>
+
+    <div class="section">
+        <h2>2. 测试按钮</h2>
+        <button onclick="testConnection()">测试连接</button>
+        <button onclick="testAICommand()">测试 AI 命令</button>
+        <button onclick="testGetAllInfo()">获取全部信息</button>
+    </div>
+
+    <div class="section">
+        <h2>3. 结果</h2>
+        <div id="result"></div>
+    </div>
+
+<script>
+async function testConnection() {
+    try {
+        const response = await fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'test_connection',
+                panel_url: document.getElementById('panelUrl').value,
+                api_key: document.getElementById('apiKey').value
+            })
+        });
+        const result = await response.json();
+        document.getElementById('result').innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+    } catch (error) {
+        document.getElementById('result').innerHTML = `<span class="error">错误: ${error.message}</span>`;
+    }
+}
+
+async function testAICommand() {
+    try {
+        const response = await fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'execute_ai_command',
+                panel_url: document.getElementById('panelUrl').value,
+                api_key: document.getElementById('apiKey').value,
+                command: document.getElementById('testCommand').value
+            })
+        });
+        const result = await response.json();
+        document.getElementById('result').innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+    } catch (error) {
+        document.getElementById('result').innerHTML = `<span class="error">错误: ${error.message}</span>`;
+    }
+}
+
+async function testGetAllInfo() {
+    try {
+        const response = await fetch('api.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'get_all_info',
+                panel_url: document.getElementById('panelUrl').value,
+                api_key: document.getElementById('apiKey').value
+            })
+        });
+        const result = await response.json();
+        document.getElementById('result').innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+    } catch (error) {
+        document.getElementById('result').innerHTML = `<span class="error">错误: ${error.message}</span>`;
+    }
+}
+</script>
+</body>
+</html>

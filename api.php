@@ -10,6 +10,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/includes/BaoTaAPI.php';
+require_once __DIR__ . '/includes/AICommandParser.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 
