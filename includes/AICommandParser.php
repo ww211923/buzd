@@ -8,37 +8,36 @@ class AICommandParser {
 
     public function parseAndExecute($userCommand) {
         $command = strtolower(trim($userCommand));
-        $results = [];
 
-        if (strpos($command, '状态') !== false || strpos($command, '系统信息') !== false || $command === 'status' || $command === 'info') {
+        if (strpos($command, '状态') !== false || strpos($command, '系统信息') !== false || $command === 'status' || $command === 'info' || strpos($command, '查看系统') !== false) {
             return $this->getSystemStatus();
         }
 
-        if (strpos($command, '创建网站') !== false || strpos($command, '新建网站') !== false || strpos($command, '添加网站') !== false) {
+        if (strpos($command, '创建网站') !== false || strpos($command, '新建网站') !== false || strpos($command, '添加网站') !== false || strpos($command, '添加站点') !== false) {
             return $this->createWebsite($userCommand);
         }
 
-        if (strpos($command, '删除网站') !== false) {
+        if (strpos($command, '删除网站') !== false || strpos($command, '删除站点') !== false) {
             return $this->deleteWebsite($userCommand);
         }
 
-        if (strpos($command, '重启网站') !== false || strpos($command, '重载网站') !== false) {
+        if (strpos($command, '重启网站') !== false || strpos($command, '重载网站') !== false || strpos($command, '重启站点') !== false) {
             return $this->restartWebsite($userCommand);
         }
 
-        if (strpos($command, '停止网站') !== false) {
+        if (strpos($command, '停止网站') !== false || strpos($command, '停止站点') !== false) {
             return $this->stopWebsite($userCommand);
         }
 
-        if (strpos($command, '启动网站') !== false) {
+        if (strpos($command, '启动网站') !== false || strpos($command, '启动站点') !== false) {
             return $this->startWebsite($userCommand);
         }
 
-        if (strpos($command, '网站列表') !== false || strpos($command, '所有网站') !== false) {
+        if (strpos($command, '网站列表') !== false || strpos($command, '所有网站') !== false || strpos($command, '查看网站') !== false || strpos($command, '站点列表') !== false) {
             return $this->listWebsites();
         }
 
-        if (strpos($command, '数据库列表') !== false || strpos($command, '所有数据库') !== false) {
+        if (strpos($command, '数据库列表') !== false || strpos($command, '所有数据库') !== false || strpos($command, '查看数据库') !== false) {
             return $this->listDatabases();
         }
 
@@ -50,7 +49,7 @@ class AICommandParser {
             return $this->deleteDatabase($userCommand);
         }
 
-        if (strpos($command, '查看文件') !== false || strpos($command, '列出文件') !== false) {
+        if (strpos($command, '查看文件') !== false || strpos($command, '列出文件') !== false || strpos($command, '浏览文件') !== false) {
             return $this->listFiles($userCommand);
         }
 
@@ -90,12 +89,17 @@ class AICommandParser {
             return $this->manageDocker($userCommand);
         }
 
+        if (strpos($command, '帮助') !== false || strpos($command, 'help') !== false || strpos($command, '命令列表') !== false) {
+            return $this->getHelp();
+        }
+
         return $this->getHelp();
     }
 
     private function getSystemStatus() {
         $result = $this->baota->getSystemTotal();
-        if (isset($result['code']) && $result['code'] !== 1) {
+
+        if (!isset($result['cpuRealUsed'])) {
             return ['success' => false, 'message' => '获取系统状态失败: ' . ($result['msg'] ?? '未知错误')];
         }
 
@@ -224,12 +228,13 @@ class AICommandParser {
         }
 
         $message = "📋 **网站列表** (共 " . count($result['data']) . " 个)\n\n";
-        $message .= "| 域名 | 路径 | 状态 | 添加时间 |\n";
-        $message .= "|------|------|------|----------|\n";
 
         foreach ($result['data'] as $site) {
             $status = ($site['status'] == '1') ? '🟢 运行中' : '🔴 已停止';
-            $message .= "| {$site['name']} | {$site['path']} | {$status} | {$site['addtime']} |\n";
+            $message .= "🌐 {$site['name']}\n";
+            $message .= "   路径: {$site['path']}\n";
+            $message .= "   状态: {$status}\n";
+            $message .= "   添加时间: {$site['addtime']}\n\n";
         }
 
         return ['success' => true, 'message' => $message, 'data' => $result['data']];
@@ -241,10 +246,11 @@ class AICommandParser {
         $message = "🗄️ **数据库列表**\n\n";
 
         if (isset($result['data']) && !empty($result['data'])) {
-            $message .= "| 数据库名 | 用户 | 编码 | 添加时间 |\n";
-            $message .= "|----------|------|------|----------|\n";
             foreach ($result['data'] as $db) {
-                $message .= "| {$db['name']} | {$db['username']} | {$db['code']} | {$db['addtime']} |\n";
+                $message .= "📦 {$db['name']}\n";
+                $message .= "   用户: {$db['username']}\n";
+                $message .= "   编码: {$db['code']}\n";
+                $message .= "   添加时间: {$db['addtime']}\n\n";
             }
         } else {
             $message .= "当前没有数据库。\n";
@@ -265,7 +271,7 @@ class AICommandParser {
         if (isset($result['code']) && $result['code'] === 1) {
             return [
                 'success' => true,
-                'message' => "✅ 数据库创建成功！\n\n📋 **数据库信息:**\n- 名称: {$name}\n- 用户: {$name}\n- 编码: utf8mb4\n- 密码: (已在面板中生成)",
+                'message' => "✅ 数据库创建成功！\n\n📋 **数据库信息:**\n- 名称: {$name}\n- 用户: {$name}\n- 编码: utf8mb4",
                 'data' => $result
             ];
         }
@@ -345,11 +351,6 @@ class AICommandParser {
             return ['success' => false, 'message' => '❌ 请提供完整的文件路径和内容。'];
         }
 
-        $fileContent = $this->baota->readFile($path);
-        if (isset($fileContent['code']) && $fileContent['code'] === 1) {
-            $content = $fileContent['data'] ?? '';
-        }
-
         $result = $this->baota->writeFile($path, $content);
 
         if (isset($result['code']) && $result['code'] === 1) {
@@ -379,6 +380,11 @@ class AICommandParser {
         if (!$cmd) {
             preg_match('/shell[:：]\s*(.+)/i', $command, $shellMatch);
             $cmd = $shellMatch[1] ?? null;
+        }
+
+        if (!$cmd) {
+            preg_match('/`(.+)`/', $command, $cmdMatch);
+            $cmd = $cmdMatch[1] ?? null;
         }
 
         if (!$cmd) {
@@ -504,7 +510,7 @@ class AICommandParser {
         $help = "🤖 **可用命令列表**\n\n";
 
         $help .= "**系统操作:**\n";
-        $help .= "- 查看系统状态 / 系统信息\n";
+        $help .= "- 查看系统状态\n";
         $help .= "- 查看磁盘信息\n";
         $help .= "- 查看 PHP 版本\n\n";
 
@@ -529,7 +535,7 @@ class AICommandParser {
         $help .= "- 删除文件 [路径]\n\n";
 
         $help .= "**其他:**\n";
-        $help .= "- 执行命令 shell:xxx\n";
+        $help .= "- 执行命令：xxx\n";
         $help .= "- Docker 容器列表\n";
         $help .= "- 计划任务列表\n";
 
@@ -544,7 +550,7 @@ class AICommandParser {
     }
 
     private function extractDomain($command) {
-        preg_match('/(?:创建|新建|添加)?\s*(?:网站|站点)\s*(?:名为|叫)?\s*([a-zA-Z0-9\-\.]+(?:\.(?:com|cn|net|org|info|xyz|top|cc|io|me|co| biz|info|mobi|name|tv|la|ru|us|in|me|cc|co|bz|hn|vc|ag|mg|cm|gs|ki|mu|nu|sc|tc|tm|to|ug|ve|vg|ws)))/i', $command, $matches);
+        preg_match('/(?:创建|新建|添加)?\s*(?:网站|站点)\s*(?:名为|叫|域名[:：])?\s*([a-zA-Z0-9\-\.]+(?:\.(?:com|cn|net|org|info|xyz|top|cc|io|me|co|biz)))/i', $command, $matches);
         if (empty($matches)) {
             preg_match('/([a-zA-Z0-9\-]+\.(?:com|cn|net|org|info|xyz|top|cc|io|me|co|biz))/i', $command, $matches);
         }
@@ -578,7 +584,7 @@ class AICommandParser {
     }
 
     private function extractFilePath($command) {
-        preg_match('/(?:路径|文件)[:：]\s*([^\s]+)/i', $command, $matches);
+        preg_match('/(?:路径|文件|路径)[:：]\s*([^\s]+)/i', $command, $matches);
         if (empty($matches)) {
             preg_match('/在\s+(\/[^\s]+)/i', $command, $matches);
         }

@@ -9,8 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-require_once __DIR__ . '/BaoTaAPI.php';
-require_once __DIR__ . '/AICommandParser.php';
+require_once __DIR__ . '/includes/BaoTaAPI.php';
 
 $input = json_decode(file_get_contents('php://input'), true);
 
@@ -50,23 +49,18 @@ switch ($action) {
 }
 
 function handleTestConnection($input) {
-    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+    if (empty($input['panel_url']) || empty($input['api_key'])) {
         echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
         exit();
     }
 
-    $baota = new BaoTaAPI(
-        $input['panel_url'],
-        $input['api_key'],
-        $input['api_secret']
-    );
-
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
     $result = $baota->testConnection();
     echo json_encode(['success' => $result, 'message' => $result ? '连接成功' : '连接失败']);
 }
 
 function handleAICommand($input) {
-    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+    if (empty($input['panel_url']) || empty($input['api_key'])) {
         echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
         exit();
     }
@@ -76,12 +70,7 @@ function handleAICommand($input) {
         exit();
     }
 
-    $baota = new BaoTaAPI(
-        $input['panel_url'],
-        $input['api_key'],
-        $input['api_secret']
-    );
-
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
     $parser = new AICommandParser($baota);
     $result = $parser->parseAndExecute($input['command']);
 
@@ -89,17 +78,12 @@ function handleAICommand($input) {
 }
 
 function handleServerStatus($input) {
-    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+    if (empty($input['panel_url']) || empty($input['api_key'])) {
         echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
         exit();
     }
 
-    $baota = new BaoTaAPI(
-        $input['panel_url'],
-        $input['api_key'],
-        $input['api_secret']
-    );
-
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
     $parser = new AICommandParser($baota);
     $result = $parser->parseAndExecute('查看系统状态');
 
@@ -107,23 +91,18 @@ function handleServerStatus($input) {
 }
 
 function handleGetAllInfo($input) {
-    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+    if (empty($input['panel_url']) || empty($input['api_key'])) {
         echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
         exit();
     }
 
-    $baota = new BaoTaAPI(
-        $input['panel_url'],
-        $input['api_key'],
-        $input['api_secret']
-    );
-
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
     $result = $baota->getAllInfo();
     echo json_encode(['success' => true, 'data' => $result]);
 }
 
 function handleDirectAPI($input) {
-    if (empty($input['panel_url']) || empty($input['api_key']) || empty($input['api_secret'])) {
+    if (empty($input['panel_url']) || empty($input['api_key'])) {
         echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
         exit();
     }
@@ -133,15 +112,9 @@ function handleDirectAPI($input) {
         exit();
     }
 
-    $baota = new BaoTaAPI(
-        $input['panel_url'],
-        $input['api_key'],
-        $input['api_secret']
-    );
-
-    $method = $input['method'] ?? 'POST';
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
     $data = $input['data'] ?? [];
 
-    $result = $baota->makeRequest($input['bt_action'], $data, $method);
+    $result = $baota->makeCustomRequest($input['bt_action'], $data);
     echo json_encode(['success' => true, 'data' => $result]);
 }

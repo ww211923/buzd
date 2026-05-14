@@ -1,78 +1,73 @@
 <?php
 class BaoTaAPI {
     private $panel_url;
-    private $api_key;
-    private $api_secret;
+    private $BT_KEY;
     private $cookies = [];
     private $last_error;
 
-    public function __construct($panel_url, $api_key, $api_secret = '') {
+    public function __construct($panel_url, $BT_KEY) {
         $this->panel_url = rtrim($panel_url, '/');
-        $this->api_key = $api_key;
-        $this->api_secret = $api_secret;
+        $this->BT_KEY = $BT_KEY;
     }
 
-    private function generateAuth() {
-        $time = time();
+    private function GetKeyData() {
+        $now_time = time();
+        $p_data = array(
+            'request_token' => md5($now_time . '' . $this->BT_KEY),
+            'request_time' => $now_time
+        );
+        return $p_data;
+    }
 
-        if (empty($this->api_secret)) {
-            return [
-                'time' => $time,
-                'token' => md5($time . md5($this->api_key))
-            ];
+    private function HttpPostCookie($url, $data, $timeout = 60) {
+        $cookie_file = __DIR__ . '/../.cookie_' . md5($this->panel_url);
+        if (!file_exists(dirname($cookie_file))) {
+            mkdir(dirname($cookie_file), 0755, true);
         }
-
-        return [
-            'time' => $time,
-            'token' => md5($time . md5($this->api_secret))
-        ];
-    }
-
-    private function makeRequest($action, $data = [], $method = 'POST') {
-        $auth = $this->generateAuth();
-        $url = $this->panel_url . $action;
-
-        $post_data = array_merge($data, [
-            'request_time' => $auth['time'],
-            'request_token' => $auth['token']
-        ]);
+        if (!file_exists($cookie_file)) {
+            touch($cookie_file);
+        }
 
         $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $url,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_SSL_VERIFYPEER => false,
-            CURLOPT_SSL_VERIFYHOST => false,
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'X-Requested-With: XMLHttpRequest'
-            ]
-        ]);
-
-        if (!empty($post_data)) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_data));
-        }
-
-        if (!empty($this->cookies)) {
-            curl_setopt($ch, CURLOPT_COOKIE, implode('; ', $this->cookies));
-        }
-
-        $response = curl_exec($ch);
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        curl_setopt($ch, CURLOPT_COOKIEJAR, $cookie_file);
+        curl_setopt($ch, CURLOPT_COOKIEFILE, $cookie_file);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_HEADER, 0);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        $output = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $curl_error = curl_error($ch);
 
-        if ($curl_error) {
+        if (curl_errno($ch)) {
+            $this->last_error = curl_error($ch);
             curl_close($ch);
-            $this->last_error = $curl_error;
-            return ['code' => 500, 'msg' => $curl_error];
+            return json_encode(['code' => 500, 'msg' => $this->last_error]);
         }
 
         curl_close($ch);
+        return $output;
+    }
 
-        $result = json_decode($response, true);
-        return $result ?: ['code' => $http_code, 'msg' => $response];
+    private function makeRequest($action, $data = []) {
+        $url = $this->panel_url . $action;
+        $p_data = $this->GetKeyData();
+
+        if (!empty($data)) {
+            $p_data = array_merge($p_data, $data);
+        }
+
+        $result = $this->HttpPostCookie($url, $p_data);
+        $data = json_decode($result, true);
+
+        if ($data === null) {
+            return ['code' => 0, 'msg' => $result, 'raw' => $result];
+        }
+
+        return $data;
     }
 
     public function getLastError() {
@@ -80,23 +75,23 @@ class BaoTaAPI {
     }
 
     public function getPanelInfo() {
-        return $this->makeRequest('/panel?action=GetPanelInfo', [], 'POST');
+        return $this->makeRequest('/data?action=getData', ['table' => 'panelInfo']);
     }
 
     public function getSystemTotal() {
-        return $this->makeRequest('/system?action=GetSystemTotal', [], 'POST');
+        return $this->makeRequest('/system?action=GetSystemTotal');
     }
 
     public function getDiskInfo() {
-        return $this->makeRequest('/system?action=GetDiskInfo', [], 'POST');
+        return $this->makeRequest('/system?action=GetDiskInfo');
     }
 
     public function getNetwork() {
-        return $this->makeRequest('/system?action=GetNetWork', [], 'POST');
+        return $this->makeRequest('/system?action=GetNetWork');
     }
 
     public function getSites($limit = 100) {
-        return $this->makeRequest('/data?action=getData&table=sites&limit=' . $limit, [], 'GET');
+        return $this->makeRequest('/data?action=getData', ['table' => 'sites', 'limit' => $limit]);
     }
 
     public function addSite($webname, $domain, $path, $php_version = '74', $sql = '0', $rewrite = 'thinkphp', $limit = '0') {
@@ -129,7 +124,7 @@ class BaoTaAPI {
     }
 
     public function getDatabaseList($type = 'MySQL') {
-        return $this->makeRequest('/database?action=get_database_list&type=' . $type, [], 'GET');
+        return $this->makeRequest('/data?action=getData', ['table' => 'databases']);
     }
 
     public function addDatabase($name, $code = 'utf8mb4') {
@@ -147,7 +142,7 @@ class BaoTaAPI {
     }
 
     public function getFilesList($path = '/www/wwwroot') {
-        return $this->makeRequest('/files?action=GetFiles', ['path' => $path], 'POST');
+        return $this->makeRequest('/files?action=GetFiles', ['path' => $path]);
     }
 
     public function createFile($path, $content = '') {
@@ -170,8 +165,12 @@ class BaoTaAPI {
         return $this->makeRequest('/shell?action=ExecShell', ['shell' => $cmd]);
     }
 
+    public function getLogs($limit = 10) {
+        return $this->makeRequest('/data?action=getData', ['table' => 'logs', 'limit' => $limit]);
+    }
+
     public function getPhpVersion() {
-        return $this->makeRequest('/php?action=get_php_version', [], 'GET');
+        return $this->makeRequest('/php?action=get_php_version');
     }
 
     public function setPhpVersion($siteName, $version) {
@@ -182,7 +181,7 @@ class BaoTaAPI {
     }
 
     public function getSSLList() {
-        return $this->makeRequest('/ssl?action=get_ssl_list', [], 'GET');
+        return $this->makeRequest('/ssl?action=get_ssl_list');
     }
 
     public function applySSL($domain) {
@@ -190,7 +189,7 @@ class BaoTaAPI {
     }
 
     public function getCrontabList() {
-        return $this->makeRequest('/crontab?action=get_crontab_list', [], 'GET');
+        return $this->makeRequest('/crontab?action=get_crontab_list');
     }
 
     public function addCrontab($name, $type, $where1, $sname) {
@@ -207,19 +206,14 @@ class BaoTaAPI {
     }
 
     public function getDockerContainers() {
-        return $this->makeRequest('/docker?action=get_containers', [], 'GET');
+        return $this->makeRequest('/docker?action=get_containers');
     }
 
     public function getDockerImages() {
-        return $this->makeRequest('/docker?action=get_images', [], 'GET');
+        return $this->makeRequest('/docker?action=get_images');
     }
 
     public function testConnection() {
-        $result = $this->getPanelInfo();
-        if (isset($result['code']) && $result['code'] === 1) {
-            return true;
-        }
-
         $result = $this->getSystemTotal();
         return isset($result['cpuRealUsed']);
     }
