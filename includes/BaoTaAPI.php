@@ -19,8 +19,8 @@ class BaoTaAPI {
     private function GetKeyData() {
         $now_time = time();
         $p_data = array(
-            'request_token' => md5($now_time . '' . $this->BT_KEY),
-            'request_time' => $now_time
+            'request_time' => $now_time,
+            'request_token' => md5($now_time . '' . md5($this->BT_KEY))
         );
         return $p_data;
     }
