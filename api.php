@@ -1,8 +1,7 @@
 <?php
-// 设置更长的执行时间和内存限制
-set_time_limit(300); // 5分钟
+// 设置更长的执行时间
+set_time_limit(300);
 ini_set('memory_limit', '512M');
-ini_set('max_execution_time', 300);
 
 header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
@@ -15,306 +14,262 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/includes/BaoTaAPI.php';
-require_once __DIR__ . '/includes/AICommandParser.php';
-require_once __DIR__ . '/includes/TaskManager.php';
-
-$taskManager = new TaskManager();
-$taskManager->cleanOldTasks();
 
 $input = json_decode(file_get_contents('php://input'), true);
+$action = $input['action'] ?? '';
 
-// 如果是 GET 请求（用于任务轮询）
-if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['task_id'])) {
-    $taskId = $_GET['task_id'];
-    $task = $taskManager->getTask($taskId);
-    if ($task) {
-        echo json_encode(['success' => true, 'task' => $task]);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Task not found']);
+try {
+    switch ($action) {
+        case 'test_connection':
+            handleTestConnection($input);
+            break;
+            
+        case 'get_status':
+            handleGetStatus($input);
+            break;
+            
+        case 'chat':
+            handleChat($input);
+            break;
+            
+        case 'list_sites':
+            handleListSites($input);
+            break;
+            
+        case 'list_dbs':
+            handleListDatabases($input);
+            break;
+            
+        case 'exec_cmd':
+            handleExecCmd($input);
+            break;
+            
+        case 'create_site':
+            handleCreateSite($input);
+            break;
+            
+        case 'list_files':
+            handleListFiles($input);
+            break;
+            
+        case 'read_file':
+            handleReadFile($input);
+            break;
+            
+        case 'write_file':
+            handleWriteFile($input);
+            break;
+            
+        default:
+            echo json_encode(['success' => false, 'message' => '未知操作']);
     }
-    exit();
-}
-
-if (empty($input['action'])) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Action is required']);
-    exit();
-}
-
-$action = $input['action'];
-
-switch ($action) {
-    case 'test_connection':
-        handleTestConnection($input);
-        break;
-
-    case 'chat':
-        handleChat($input, $taskManager);
-        break;
-
-    case 'execute_ai_command':
-        handleAICommand($input, $taskManager);
-        break;
-
-    case 'get_server_status':
-        handleServerStatus($input);
-        break;
-
-    case 'get_all_info':
-        handleGetAllInfo($input);
-        break;
-
-    case 'direct_api':
-        handleDirectAPI($input);
-        break;
-
-    case 'get_task_status':
-        handleGetTaskStatus($input, $taskManager);
-        break;
-
-    default:
-        http_response_code(400);
-        echo json_encode(['error' => 'Invalid action']);
-        break;
+} catch (Exception $e) {
+    echo json_encode(['success' => false, 'message' => '错误: ' . $e->getMessage()]);
 }
 
 function handleTestConnection($input) {
-    if (empty($input['panel_url']) || empty($input['api_key'])) {
-        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
-        exit();
-    }
-
     $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
     $result = $baota->testConnection();
     echo json_encode(['success' => $result, 'message' => $result ? '连接成功' : '连接失败']);
 }
 
-function handleChat($input, $taskManager) {
-    if (empty($input['panel_url']) || empty($input['api_key'])) {
-        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
-        exit();
-    }
-
-    if (empty($input['message'])) {
-        echo json_encode(['success' => false, 'message' => 'Message is required']);
-        exit();
-    }
-
-    if (empty($input['deepseek_api_key'])) {
-        echo json_encode(['success' => false, 'message' => 'DeepSeek API Key is required']);
-        exit();
-    }
-
-    $userMessage = $input['message'];
-    $history = $input['history'] ?? [];
-
+function handleGetStatus($input) {
     $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->getSystemTotal();
+    echo json_encode(['success' => isset($result['cpuRealUsed']), 'data' => $result]);
+}
 
-    $systemPrompt = "你是一个专业的服务器运维助手，可以通过宝塔面板 API 管理服务器。
+function handleListSites($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->getSites();
+    echo json_encode(['success' => true, 'data' => $result]);
+}
 
-可用的功能：
-1. 网站管理：创建、删除、重启、启动、停止网站
-2. 数据库管理：创建、删除数据库
-3. 文件管理：浏览、读取、写入、删除文件
-4. 系统信息：CPU、内存、磁盘、网络状态
-5. Shell命令：执行任意Linux命令
+function handleListDatabases($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->getDatabaseList();
+    echo json_encode(['success' => true, 'data' => $result]);
+}
 
-当用户提出操作需求时：
-- 如果可以执行，直接调用相应的 API
-- 如果需要更多信息，询问用户
-- 如果操作成功，返回结果
-- 如果操作失败，返回错误原因
+function handleExecCmd($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->executeCommand($input['cmd']);
+    echo json_encode(['success' => isset($result['code']) && $result['code'] == 1, 'data' => $result]);
+}
 
-示例：
-用户：帮我创建一个网站，域名为 test.com
-助手：好的，我来为您创建网站 test.com
+function handleCreateSite($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->addSite(
+        $input['domain'],
+        $input['domain'],
+        '/www/wwwroot/' . $input['domain'],
+        $input['php'] ?? '73'
+    );
+    echo json_encode(['success' => isset($result['code']) && $result['code'] == 1, 'data' => $result]);
+}
 
-执行结果：✅ 网站创建成功！
-- 域名: test.com
-- 路径: /www/wwwroot/test.com
-- PHP版本: 74
+function handleListFiles($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->getFilesList($input['path'] ?? '/www/wwwroot');
+    echo json_encode(['success' => true, 'data' => $result]);
+}
 
----
+function handleReadFile($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->readFile($input['path']);
+    echo json_encode(['success' => isset($result['code']) && $result['code'] == 1, 'data' => $result]);
+}
 
-当前服务器信息：";
+function handleWriteFile($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $result = $baota->writeFile($input['path'], $input['content']);
+    echo json_encode(['success' => isset($result['code']) && $result['code'] == 1, 'data' => $result]);
+}
 
+function handleChat($input) {
+    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
+    $deepseekKey = $input['deepseek_key'] ?? '';
+    $userMsg = $input['message'] ?? '';
+    
     $systemInfo = $baota->getSystemTotal();
+    $sites = $baota->getSites();
+    
+    $context = "当前服务器状态：\n";
     if (isset($systemInfo['cpuRealUsed'])) {
-        $systemPrompt .= "- 操作系统: {$systemInfo['system']}\n";
-        $systemPrompt .= "- CPU: {$systemInfo['cpuRealUsed']}% ({$systemInfo['cpuNum']}核)\n";
-        $systemPrompt .= "- 内存: {$systemInfo['memRealUsed']}MB / {$systemInfo['memTotal']}MB\n";
+        $context .= "- CPU: {$systemInfo['cpuRealUsed']}% ({$systemInfo['cpuNum']}核)\n";
+        $context .= "- 内存: {$systemInfo['memRealUsed']}MB / {$systemInfo['memTotal']}MB\n";
+        $context .= "- 系统: {$systemInfo['system']}\n";
+        $context .= "- 运行时间: {$systemInfo['time']}\n";
     }
-
-    $messages = [
-        ['role' => 'system', 'content' => $systemPrompt]
-    ];
-
-    foreach ($history as $h) {
-        $messages[] = $h;
-    }
-
-    $messages[] = ['role' => 'user', 'content' => $userMessage];
-
-    // 创建任务用于进度跟踪
-    $taskId = $taskManager->createTask('chat', ['message' => $userMessage]);
-    $taskManager->updateProgress($taskId, 10, '正在连接 DeepSeek AI...');
-
-    try {
-        $ch = curl_init('https://api.deepseek.com/chat/completions');
-        curl_setopt_array($ch, [
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => json_encode([
-                'model' => 'deepseek-v4-pro',
-                'messages' => $messages,
-                'stream' => false,
-                'thinking' => ['type' => 'disabled']
-            ]),
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: application/json',
-                'Authorization: Bearer ' . $input['deepseek_api_key']
-            ],
-            CURLOPT_TIMEOUT => 180, // 3分钟超时
-            CURLOPT_CONNECTTIMEOUT => 30
-        ]);
-
-        $taskManager->updateProgress($taskId, 30, '正在获取 AI 响应...');
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        $taskManager->updateProgress($taskId, 60, '解析 AI 响应...');
-        $result = json_decode($response, true);
-
-        if (isset($result['choices'][0]['message']['content'])) {
-            $aiResponse = $result['choices'][0]['message']['content'];
-
-            $parser = new AICommandParser($baota);
-            $commands = $parser->extractCommands($aiResponse);
-
-            $executionResults = [];
-            if (!empty($commands)) {
-                $taskManager->updateProgress($taskId, 80, '正在执行宝塔操作...');
-                foreach ($commands as $cmd) {
-                    $execResult = $parser->parseAndExecute($cmd);
-                    $executionResults[] = $execResult;
-                }
-            }
-
-            $taskManager->updateProgress($taskId, 100, '完成');
-
-            echo json_encode([
-                'success' => true,
-                'message' => $aiResponse,
-                'execution_results' => $executionResults,
-                'raw_response' => $result,
-                'task_id' => $taskId
-            ]);
-        } else {
-            $errorMsg = isset($result['error']['message']) ? $result['error']['message'] : 'DeepSeek API 请求失败';
-            $taskManager->markFailed($taskId, $errorMsg);
-            echo json_encode([
-                'success' => false,
-                'message' => $errorMsg,
-                'error' => $result
-            ]);
+    
+    if (isset($sites['data'])) {
+        $context .= "\n现有网站 (" . count($sites['data']) . "个):\n";
+        foreach ($sites['data'] as $site) {
+            $context .= "- {$site['name']} (PHP {$site['php_version']})\n";
         }
-    } catch (Exception $e) {
-        $taskManager->markFailed($taskId, $e->getMessage());
-        echo json_encode([
-            'success' => false,
-            'message' => '请求异常: ' . $e->getMessage()
-        ]);
     }
+    
+    $response = callDeepSeek($deepseekKey, $context, $userMsg, $baota);
+    echo json_encode($response);
 }
 
-function handleAICommand($input, $taskManager) {
-    if (empty($input['panel_url']) || empty($input['api_key'])) {
-        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
-        exit();
+function callDeepSeek($apiKey, $context, $userMsg, $baota) {
+    if (empty($apiKey)) {
+        return ['success' => false, 'message' => '请先配置DeepSeek API Key'];
     }
+    
+    $prompt = <<<PROMPT
+你是一个专业的宝塔面板服务器管理助手。你可以：
+1. 获取系统状态和信息
+2. 列出、创建、删除网站
+3. 管理数据库
+4. 操作文件（查看、编辑、删除）
+5. 执行Shell命令
+6. 管理PHP版本
 
-    if (empty($input['command'])) {
-        echo json_encode(['success' => false, 'message' => 'Command is required']);
-        exit();
+当前服务器信息：
+$context
+
+用户的问题是：$userMsg
+
+请分析用户需求，并在下方回复。如果需要执行操作，请直接使用【】标记说明，例如：
+【查看系统状态】
+【列出网站列表】
+【执行命令：ls -la】
+【创建网站：example.com】
+【查看文件：/www/wwwroot/index.html】
+【写入文件：/www/wwwroot/test.html 内容：Hello World】
+
+注意：不要用Markdown格式，直接用自然语言回复。
+PROMPT;
+
+    $ch = curl_init('https://api.deepseek.com/chat/completions');
+    curl_setopt_array($ch, [
+        CURLOPT_POST => true,
+        CURLOPT_POSTFIELDS => json_encode([
+            'model' => 'deepseek-chat',
+            'messages' => [
+                ['role' => 'system', 'content' => '你是一个专业的宝塔面板服务器管理助手。'],
+                ['role' => 'user', 'content' => $prompt]
+            ],
+            'temperature' => 0.7
+        ]),
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HTTPHEADER => [
+            'Content-Type: application/json',
+            'Authorization: Bearer ' . $apiKey
+        ],
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false
+    ]);
+    
+    $result = curl_exec($ch);
+    $error = curl_error($ch);
+    curl_close($ch);
+    
+    if ($error) {
+        return ['success' => false, 'message' => 'DeepSeek请求失败: ' . $error];
     }
-
-    $taskId = $taskManager->createTask('command', ['command' => $input['command']]);
-    $taskManager->updateProgress($taskId, 10, '正在连接宝塔面板...');
-
-    try {
-        $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
-        $parser = new AICommandParser($baota);
-
-        $taskManager->updateProgress($taskId, 30, '正在执行命令...');
-        $result = $parser->parseAndExecute($input['command']);
-
-        $taskManager->updateProgress($taskId, 100, '完成');
-        $taskManager->markComplete($taskId, $result);
-
-        echo json_encode($result + ['task_id' => $taskId]);
-    } catch (Exception $e) {
-        $taskManager->markFailed($taskId, $e->getMessage());
-        echo json_encode([
-            'success' => false,
-            'message' => $e->getMessage(),
-            'task_id' => $taskId
-        ]);
+    
+    $data = json_decode($result, true);
+    if (!isset($data['choices'][0]['message']['content'])) {
+        return ['success' => false, 'message' => 'DeepSeek返回无效数据: ' . $result];
     }
+    
+    $aiText = $data['choices'][0]['message']['content'];
+    $executed = executeCommands($aiText, $baota);
+    
+    return [
+        'success' => true,
+        'message' => $aiText,
+        'executed' => $executed
+    ];
 }
 
-function handleServerStatus($input) {
-    if (empty($input['panel_url']) || empty($input['api_key'])) {
-        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
-        exit();
-    }
-
-    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
-    $parser = new AICommandParser($baota);
-    $result = $parser->parseAndExecute('查看系统状态');
-
-    echo json_encode($result);
+function executeCommands($aiText, $baota) {
+    $results = [];
+    $aiText = preg_replace_callback('/【([^】]+)】/', function($matches) use ($baota, &$results) {
+        $cmd = trim($matches[1]);
+        $result = tryExecuteCommand($cmd, $baota);
+        $results[] = $result;
+        return '';
+    }, $aiText);
+    
+    return $results;
 }
 
-function handleGetAllInfo($input) {
-    if (empty($input['panel_url']) || empty($input['api_key'])) {
-        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
-        exit();
+function tryExecuteCommand($cmd, $baota) {
+    if (strpos($cmd, '查看系统状态') !== false || strpos($cmd, '系统状态') !== false) {
+        $r = $baota->getSystemTotal();
+        return ['cmd' => $cmd, 'success' => true, 'result' => $r];
     }
-
-    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
-    $result = $baota->getAllInfo();
-    echo json_encode(['success' => true, 'data' => $result]);
-}
-
-function handleDirectAPI($input) {
-    if (empty($input['panel_url']) || empty($input['api_key'])) {
-        echo json_encode(['success' => false, 'message' => 'Missing required parameters']);
-        exit();
+    
+    if (strpos($cmd, '列出网站列表') !== false || strpos($cmd, '查看网站') !== false) {
+        $r = $baota->getSites();
+        return ['cmd' => $cmd, 'success' => true, 'result' => $r];
     }
-
-    if (empty($input['bt_action'])) {
-        echo json_encode(['success' => false, 'message' => 'BT action is required']);
-        exit();
+    
+    if (preg_match('/执行命令：(.+)/', $cmd, $m)) {
+        $r = $baota->executeCommand($m[1]);
+        return ['cmd' => $cmd, 'success' => true, 'result' => $r];
     }
-
-    $baota = new BaoTaAPI($input['panel_url'], $input['api_key']);
-    $data = $input['data'] ?? [];
-
-    $result = $baota->makeCustomRequest($input['bt_action'], $data);
-    echo json_encode(['success' => true, 'data' => $result]);
-}
-
-function handleGetTaskStatus($input, $taskManager) {
-    if (empty($input['task_id'])) {
-        echo json_encode(['success' => false, 'message' => 'Task ID required']);
-        exit();
+    
+    if (preg_match('/创建网站：(.+)/', $cmd, $m)) {
+        $domain = $m[1];
+        $r = $baota->addSite($domain, $domain, '/www/wwwroot/'.$domain, '73');
+        return ['cmd' => $cmd, 'success' => true, 'result' => $r];
     }
-
-    $task = $taskManager->getTask($input['task_id']);
-    if ($task) {
-        echo json_encode(['success' => true, 'task' => $task]);
-    } else {
-        echo json_encode(['success' => false, 'message' => 'Task not found']);
+    
+    if (preg_match('/查看文件：(.+)/', $cmd, $m)) {
+        $r = $baota->readFile($m[1]);
+        return ['cmd' => $cmd, 'success' => true, 'result' => $r];
     }
+    
+    if (preg_match('/写入文件：(.+?) 内容：(.+)/s', $cmd, $m)) {
+        $r = $baota->writeFile($m[1], $m[2]);
+        return ['cmd' => $cmd, 'success' => true, 'result' => $r];
+    }
+    
+    return ['cmd' => $cmd, 'success' => false, 'result' => '未识别的命令'];
 }

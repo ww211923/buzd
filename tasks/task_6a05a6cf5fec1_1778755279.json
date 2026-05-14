@@ -1,0 +1,56 @@
+{
+    "id": "task_6a05a6cf5fec1_1778755279",
+    "type": "command",
+    "status": "completed",
+    "progress": 100,
+    "data": {
+        "command": "查看系统状态"
+    },
+    "created_at": 1778755279,
+    "updated_at": 1778755280,
+    "logs": [
+        {
+            "time": "2026-05-14 10:41:19",
+            "message": "正在连接宝塔面板..."
+        },
+        {
+            "time": "2026-05-14 10:41:19",
+            "message": "正在执行命令..."
+        },
+        {
+            "time": "2026-05-14 10:41:20",
+            "message": "完成"
+        }
+    ],
+    "result": {
+        "success": true,
+        "message": "📊 **系统状态报告**\n\n**服务器信息:**\n- 操作系统: CentOS  7.9.2009 x86_64(Py3.7.9)\n- 面板版本: 11.5.0\n- 运行时间: 30天\n\n**CPU 信息:**\n- 核心数: 2 核\n- 使用率: 1%\n\n**内存信息:**\n- 总内存: 1837 MB\n- 已使用: 772 MB\n- 可用: 176 MB\n- 缓存: 887 MB\n\n**网络流量:**\n- 下载: 13.25 KB\/s\n- 上传: 15.85 KB\/s\n\n**磁盘信息:**\n- \/: 30.0 GB\/5.8 GB 可用 (使用 19.39%)\n",
+        "data": {
+            "memTotal": 1837,
+            "memFree": 176,
+            "memBuffers": 2,
+            "memCached": 887,
+            "memAvailable": 788,
+            "memShared": 105,
+            "memRealUsed": 772,
+            "memNewTotalList": [
+                "1.8",
+                "GB"
+            ],
+            "memNewRealUsedList": [
+                "772.0",
+                "MB"
+            ],
+            "memNewRealUsed": "772.0MB",
+            "memNewTotal": "1.8GB",
+            "cpuNum": 2,
+            "cpuRealUsed": 1,
+            "time": "30天",
+            "system": "CentOS  7.9.2009 x86_64(Py3.7.9)",
+            "isuser": 0,
+            "isport": false,
+            "version": "11.5.0"
+        }
+    },
+    "error": null
+}
