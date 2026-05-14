@@ -5,10 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DeepSeek AI + 宝塔控制台</title>
     <link rel="stylesheet" href="assets/style.css">
+    <style>
+        .task-progress {
+            width: 100%;
+            background: rgba(255,255,255,0.2);
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .task-progress-bar {
+            height: 8px;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
+            transition: width 0.3s ease;
+        }
+        .task-status {
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.8);
+            margin-top: 5px;
+        }
+        .task-log {
+            background: rgba(0,0,0,0.1);
+            padding: 8px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            margin-top: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <!-- 头部 -->
         <header class="header">
             <h1>🤖 AI 控制台</h1>
             <div class="header-actions">
@@ -17,14 +45,12 @@
             </div>
         </header>
 
-        <!-- 服务器选择 -->
         <div class="server-selector">
             <div class="server-tabs" id="serverTabs">
                 <button class="add-server-btn" onclick="openSettings()">+ 添加服务器</button>
             </div>
         </div>
 
-        <!-- 状态栏 -->
         <div class="status-bar" id="statusBar">
             <div class="status-chip">
                 <div class="value" id="cpuValue">--</div>
@@ -40,7 +66,6 @@
             </div>
         </div>
 
-        <!-- 聊天区域 -->
         <div class="chat-container" id="chatContainer">
             <div class="welcome">
                 <div class="welcome-icon">🚀</div>
@@ -50,7 +75,6 @@
             </div>
         </div>
 
-        <!-- 快捷命令 -->
         <div class="quick-commands">
             <button class="quick-cmd" onclick="quickCommand('查看系统状态')">📊 状态</button>
             <button class="quick-cmd" onclick="quickCommand('帮我创建一个网站，域名为 example.com')">🌐 建站</button>
@@ -58,7 +82,6 @@
             <button class="quick-cmd" onclick="quickCommand('帮我执行命令：free -m')">💻 命令</button>
         </div>
 
-        <!-- 输入区域 -->
         <div class="input-area">
             <div class="input-wrapper">
                 <textarea id="userInput" placeholder="说出您的需求..." rows="1" oninput="autoResize(this)"></textarea>
@@ -75,7 +98,6 @@
         </div>
     </div>
 
-    <!-- 设置面板 -->
     <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings(event)">
         <div class="settings-panel" onclick="event.stopPropagation()">
             <div class="settings-header">
@@ -104,15 +126,15 @@
         </div>
     </div>
 
-    <!-- Toast 提示 -->
     <div class="toast" id="toast"></div>
 
     <script>
         let currentServer = null;
         let servers = [];
         let chatHistory = [];
+        let currentTaskId = null;
+        let taskPollingInterval = null;
 
-        // 加载设置
         function loadSettings() {
             const savedApiKey = localStorage.getItem('deepseek_api_key');
             if (savedApiKey) document.getElementById('apiKeyInput').value = savedApiKey;
@@ -133,7 +155,6 @@
             }
         }
 
-        // 渲染历史记录
         function renderHistory() {
             if (chatHistory.length === 0) return;
 
@@ -145,7 +166,6 @@
             });
         }
 
-        // 渲染服务器列表
         function renderServers() {
             const tabs = document.getElementById('serverTabs');
             let html = '';
@@ -164,14 +184,12 @@
             tabs.innerHTML = html;
         }
 
-        // 选择服务器
         function selectServer(index) {
             currentServer = index;
             renderServers();
             refreshStatus();
         }
 
-        // 刷新状态
         async function refreshStatus() {
             if (currentServer === null || !servers[currentServer]) return;
 
@@ -200,20 +218,17 @@
             }
         }
 
-        // 快捷命令
         function quickCommand(cmd) {
             document.getElementById('userInput').value = cmd;
             sendMessage();
         }
 
-        // 自动调整输入框高度
         function autoResize(el) {
             el.style.height = 'auto';
             el.style.height = Math.min(el.scrollHeight, 120) + 'px';
             document.getElementById('charCount').textContent = el.value.length + ' 字符';
         }
 
-        // 发送消息
         async function sendMessage() {
             const input = document.getElementById('userInput');
             const message = input.value.trim();
@@ -232,17 +247,28 @@
                 return;
             }
 
-            // 添加用户消息
             addMessage('user', message);
             chatHistory.push({ role: 'user', content: message });
             input.value = '';
             autoResize(input);
 
-            // 添加加载动画
             const loadingEl = document.createElement('div');
-            loadingEl.className = 'loading-dots';
-            loadingEl.id = 'loading';
-            loadingEl.innerHTML = '<span></span><span></span><span></span>';
+            loadingEl.className = 'ai-message message';
+            loadingEl.id = 'loading-message';
+            loadingEl.innerHTML = `
+                <div class="message-content">
+                    <div class="loading-dots" style="padding: 0; background: none; border: none;">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <div id="task-progress-container" style="display: none; margin-top: 10px;">
+                        <div class="task-progress">
+                            <div class="task-progress-bar" id="task-progress-bar" style="width: 0%"></div>
+                        </div>
+                        <div class="task-status" id="task-status-text">准备中...</div>
+                        <div class="task-log" id="task-log"></div>
+                    </div>
+                </div>
+            `;
             document.getElementById('chatContainer').appendChild(loadingEl);
             scrollToBottom();
 
@@ -250,7 +276,6 @@
             const startTime = Date.now();
 
             try {
-                // 调用 DeepSeek AI
                 const response = await fetch('api.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -265,14 +290,11 @@
                 });
 
                 const result = await response.json();
-                loadingEl.remove();
 
                 if (result.success) {
-                    // 添加 AI 响应
                     addMessage('ai', result.message);
                     chatHistory.push({ role: 'assistant', content: result.message });
 
-                    // 如果有执行结果，显示
                     if (result.execution_results && result.execution_results.length > 0) {
                         result.execution_results.forEach(execResult => {
                             if (execResult.success) {
@@ -283,7 +305,6 @@
                         });
                     }
 
-                    // 保存历史
                     localStorage.setItem('chat_history', JSON.stringify(chatHistory.slice(-50)));
                 } else {
                     addMessage('ai', '❌ ' + result.message);
@@ -293,12 +314,67 @@
                 document.getElementById('responseTime').textContent = ((endTime - startTime) / 1000).toFixed(1) + 's';
 
             } catch (error) {
-                loadingEl.remove();
-                showToast('请求失败: ' + error.message, 'error');
+                addMessage('ai', '❌ 请求失败: ' + error.message);
+            } finally {
+                const loadingMsg = document.getElementById('loading-message');
+                if (loadingMsg) loadingMsg.remove();
+                stopTaskPolling();
             }
         }
 
-        // 添加消息
+        function startTaskPolling(taskId) {
+            currentTaskId = taskId;
+            const progressContainer = document.getElementById('task-progress-container');
+            const progressBar = document.getElementById('task-progress-bar');
+            const statusText = document.getElementById('task-status-text');
+            const taskLog = document.getElementById('task-log');
+
+            if (progressContainer) {
+                progressContainer.style.display = 'block';
+            }
+
+            taskPollingInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`api.php?task_id=${taskId}`);
+                    const result = await response.json();
+
+                    if (result.success && result.task) {
+                        const task = result.task;
+
+                        if (progressBar) {
+                            progressBar.style.width = task.progress + '%';
+                        }
+                        if (statusText) {
+                            statusText.textContent = `进度: ${task.progress}% - ${task.status}`;
+                        }
+                        if (taskLog && task.logs && task.logs.length > 0) {
+                            taskLog.innerHTML = task.logs.map(log => 
+                                `<div>[${log.time}] ${log.message}</div>`
+                            ).join('');
+                            taskLog.scrollTop = taskLog.scrollHeight;
+                        }
+
+                        if (task.status === 'completed' || task.status === 'failed') {
+                            stopTaskPolling();
+                            if (task.status === 'failed') {
+                                showToast('任务失败: ' + task.error, 'error');
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('轮询任务状态失败:', error);
+                }
+            }, 1000);
+        }
+
+        function stopTaskPolling() {
+            if (taskPollingInterval) {
+                clearInterval(taskPollingInterval);
+                taskPollingInterval = null;
+            }
+            currentTaskId = null;
+        }
+
         function addMessage(role, content, saveHistory = true) {
             const welcome = document.querySelector('.welcome');
             if (welcome) welcome.remove();
@@ -324,7 +400,6 @@
             }
         }
 
-        // 格式化内容
         function formatContent(text) {
             text = escapeHtml(text);
             text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -334,20 +409,17 @@
             return text;
         }
 
-        // HTML 转义
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
 
-        // 滚动到底部
         function scrollToBottom() {
             const container = document.getElementById('chatContainer');
             container.scrollTop = container.scrollHeight;
         }
 
-        // 清空对话
         function clearChat() {
             chatHistory = [];
             localStorage.removeItem('chat_history');
@@ -362,7 +434,6 @@
             document.getElementById('responseTime').textContent = '';
         }
 
-        // 设置面板
         function openSettings() {
             document.getElementById('settingsOverlay').classList.add('active');
         }
@@ -372,7 +443,6 @@
             document.getElementById('settingsOverlay').classList.remove('active');
         }
 
-        // 测试并保存
         async function testAndSave() {
             const deepseekApiKey = document.getElementById('apiKeyInput').value.trim();
             const panelUrl = document.getElementById('panelUrl').value.trim();
@@ -400,10 +470,8 @@
                     const result = await response.json();
 
                     if (result.success) {
-                        // 保存 DeepSeek Key
                         localStorage.setItem('deepseek_api_key', deepseekApiKey);
 
-                        // 保存服务器
                         const serverName = panelUrl.split('//')[1]?.split(':')[0] || '服务器';
                         const server = { name: serverName, url: panelUrl, apiKey: btApiKey };
 
@@ -421,7 +489,6 @@
                         showToast('配置成功！', 'success');
                         closeSettings();
 
-                        // 自动获取状态
                         refreshStatus();
                     } else {
                         showToast('宝塔连接失败: ' + result.message, 'error');
@@ -434,7 +501,6 @@
             }
         }
 
-        // Toast 提示
         function showToast(message, type = 'info') {
             const toast = document.getElementById('toast');
             toast.textContent = message;
@@ -442,7 +508,6 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
-        // 回车发送
         document.getElementById('userInput').addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -450,7 +515,6 @@
             }
         });
 
-        // 初始化
         loadSettings();
     </script>
 </body>
