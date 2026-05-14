@@ -18,9 +18,9 @@ echo "<style>
 </style></head><body>";
 echo "<h1>🔧 宝塔 API 测试工具</h1>";
 
-// 使用您提供的配置
+// 使用正确的配置
 $panel_url = 'https://38.207.177.103:35957';
-$api_key = 'thVLXFtUCCNzBShBweKTPBmw8296q8R8';
+$api_key = 'BjdFTLZ2jbQ856A4wjl55lnA7uOInsTu';
 
 echo "<div class='info'>";
 echo "<strong>📋 当前配置：</strong><br>";
@@ -28,7 +28,7 @@ echo "面板地址: $panel_url<br>";
 echo "API Key: $api_key<br>";
 echo "</div>";
 
-$baota = new BaoTaAPI($panel_url, $api_key, '');
+$baota = new BaoTaAPI($panel_url, $api_key);
 
 echo "<h2>1️⃣ 获取系统状态</h2>";
 $result = $baota->getSystemTotal();
@@ -64,8 +64,8 @@ echo "<h2>6️⃣ 获取磁盘信息</h2>";
 $result = $baota->getDiskInfo();
 echo "<pre>" . json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "</pre>";
 
-echo "<h2>7️⃣ 获取面板信息</h2>";
-$result = $baota->getPanelInfo();
+echo "<h2>7️⃣ 获取面板日志</h2>";
+$result = $baota->getLogs(10);
 echo "<pre>" . json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "</pre>";
 
 echo "</body></html>";
