@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DeepSeek + 宝塔 AI 控制台</title>
+    <title>DeepSeek AI + 宝塔控制台</title>
     <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
@@ -44,23 +44,24 @@
         <div class="chat-container" id="chatContainer">
             <div class="welcome">
                 <div class="welcome-icon">🚀</div>
-                <h2>DeepSeek + 宝塔 AI</h2>
-                <p>开始智能服务器管理</p>
+                <h2>DeepSeek AI + 宝塔</h2>
+                <p>说出您的需求，AI 帮您完成服务器管理</p>
+                <p style="font-size: 0.8rem; margin-top: 10px; opacity: 0.7;">例如："帮我创建一个网站，域名为 test.com"</p>
             </div>
         </div>
 
         <!-- 快捷命令 -->
         <div class="quick-commands">
             <button class="quick-cmd" onclick="quickCommand('查看系统状态')">📊 状态</button>
-            <button class="quick-cmd" onclick="quickCommand('查看网站列表')">🌐 网站</button>
-            <button class="quick-cmd" onclick="quickCommand('查看数据库列表')">🗄️ 数据库</button>
-            <button class="quick-cmd" onclick="quickCommand('执行命令：free -m')">💻 内存</button>
+            <button class="quick-cmd" onclick="quickCommand('帮我创建一个网站，域名为 example.com')">🌐 建站</button>
+            <button class="quick-cmd" onclick="quickCommand('查看网站列表')">📋 网站</button>
+            <button class="quick-cmd" onclick="quickCommand('帮我执行命令：free -m')">💻 命令</button>
         </div>
 
         <!-- 输入区域 -->
         <div class="input-area">
             <div class="input-wrapper">
-                <textarea id="userInput" placeholder="输入指令..." rows="1" oninput="autoResize(this)"></textarea>
+                <textarea id="userInput" placeholder="说出您的需求..." rows="1" oninput="autoResize(this)"></textarea>
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()">
                     <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
                         <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -78,23 +79,24 @@
     <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings(event)">
         <div class="settings-panel" onclick="event.stopPropagation()">
             <div class="settings-header">
-                <h3>⚙️ 设置</h3>
+                <h3>⚙️ 配置</h3>
                 <button class="settings-close" onclick="closeSettings()">✕</button>
             </div>
 
             <div class="form-group">
                 <label>DeepSeek API Key</label>
                 <input type="password" id="apiKeyInput" placeholder="sk-xxxxxxxxxxxxxxxx">
+                <small style="color: #666; font-size: 0.8rem; margin-top: 5px; display: block;">从 platform.deepseek.com 获取</small>
             </div>
 
             <div class="form-group">
-                <label>面板地址</label>
-                <input type="text" id="panelUrl" placeholder="https://your-server:8888">
+                <label>宝塔面板地址</label>
+                <input type="text" id="panelUrl" placeholder="https://your-server:8888" value="https://38.207.177.103:35957">
             </div>
 
             <div class="form-group">
-                <label>API Key</label>
-                <input type="password" id="btApiKey" placeholder="宝塔 API Key">
+                <label>宝塔 API Key</label>
+                <input type="password" id="btApiKey" placeholder="宝塔 API Key" value="BjdFTLZ2jbQ856A4wjl55lnA7uOInsTu">
             </div>
 
             <button class="settings-btn primary" onclick="testAndSave()">保存并连接</button>
@@ -108,6 +110,7 @@
     <script>
         let currentServer = null;
         let servers = [];
+        let chatHistory = [];
 
         // 加载设置
         function loadSettings() {
@@ -122,6 +125,24 @@
                     selectServer(0);
                 }
             }
+
+            const savedHistory = localStorage.getItem('chat_history');
+            if (savedHistory) {
+                chatHistory = JSON.parse(savedHistory);
+                renderHistory();
+            }
+        }
+
+        // 渲染历史记录
+        function renderHistory() {
+            if (chatHistory.length === 0) return;
+
+            const welcome = document.querySelector('.welcome');
+            if (welcome) welcome.remove();
+
+            chatHistory.forEach(msg => {
+                addMessage(msg.role, msg.content, false);
+            });
         }
 
         // 渲染服务器列表
@@ -198,21 +219,22 @@
             const message = input.value.trim();
             if (!message) return;
 
-            const apiKey = localStorage.getItem('deepseek_api_key');
-            if (!apiKey) {
+            const deepseekApiKey = localStorage.getItem('deepseek_api_key');
+            if (!deepseekApiKey) {
                 showToast('请先配置 DeepSeek API Key', 'error');
                 openSettings();
                 return;
             }
 
             if (currentServer === null) {
-                showToast('请先添加服务器', 'error');
+                showToast('请先添加宝塔服务器', 'error');
                 openSettings();
                 return;
             }
 
             // 添加用户消息
             addMessage('user', message);
+            chatHistory.push({ role: 'user', content: message });
             input.value = '';
             autoResize(input);
 
@@ -228,14 +250,17 @@
             const startTime = Date.now();
 
             try {
+                // 调用 DeepSeek AI
                 const response = await fetch('api.php', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        action: 'execute_ai_command',
+                        action: 'chat',
+                        deepseek_api_key: deepseekApiKey,
                         panel_url: server.url,
                         api_key: server.apiKey,
-                        command: message
+                        message: message,
+                        history: chatHistory.slice(-10)
                     })
                 });
 
@@ -243,7 +268,23 @@
                 loadingEl.remove();
 
                 if (result.success) {
+                    // 添加 AI 响应
                     addMessage('ai', result.message);
+                    chatHistory.push({ role: 'assistant', content: result.message });
+
+                    // 如果有执行结果，显示
+                    if (result.execution_results && result.execution_results.length > 0) {
+                        result.execution_results.forEach(execResult => {
+                            if (execResult.success) {
+                                setTimeout(() => {
+                                    addMessage('ai', '🔧 ' + execResult.message);
+                                }, 500);
+                            }
+                        });
+                    }
+
+                    // 保存历史
+                    localStorage.setItem('chat_history', JSON.stringify(chatHistory.slice(-50)));
                 } else {
                     addMessage('ai', '❌ ' + result.message);
                 }
@@ -258,7 +299,7 @@
         }
 
         // 添加消息
-        function addMessage(role, content) {
+        function addMessage(role, content, saveHistory = true) {
             const welcome = document.querySelector('.welcome');
             if (welcome) welcome.remove();
 
@@ -273,6 +314,14 @@
 
             document.getElementById('chatContainer').appendChild(msg);
             scrollToBottom();
+
+            if (saveHistory && (role === 'user' || role === 'assistant')) {
+                chatHistory.push({ role, content });
+                if (chatHistory.length > 50) {
+                    chatHistory = chatHistory.slice(-50);
+                }
+                localStorage.setItem('chat_history', JSON.stringify(chatHistory));
+            }
         }
 
         // 格式化内容
@@ -300,12 +349,14 @@
 
         // 清空对话
         function clearChat() {
+            chatHistory = [];
+            localStorage.removeItem('chat_history');
             const container = document.getElementById('chatContainer');
             container.innerHTML = `
                 <div class="welcome">
                     <div class="welcome-icon">🚀</div>
-                    <h2>DeepSeek + 宝塔 AI</h2>
-                    <p>开始智能服务器管理</p>
+                    <h2>DeepSeek AI + 宝塔</h2>
+                    <p>说出您的需求，AI 帮您完成服务器管理</p>
                 </div>
             `;
             document.getElementById('responseTime').textContent = '';
@@ -323,14 +374,19 @@
 
         // 测试并保存
         async function testAndSave() {
-            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            const deepseekApiKey = document.getElementById('apiKeyInput').value.trim();
             const panelUrl = document.getElementById('panelUrl').value.trim();
             const btApiKey = document.getElementById('btApiKey').value.trim();
 
-            if (apiKey) localStorage.setItem('deepseek_api_key', apiKey);
+            if (!deepseekApiKey) {
+                showToast('请输入 DeepSeek API Key', 'error');
+                return;
+            }
 
             if (panelUrl && btApiKey) {
                 try {
+                    showToast('正在测试连接...', 'info');
+
                     const response = await fetch('api.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -342,7 +398,12 @@
                     });
 
                     const result = await response.json();
+
                     if (result.success) {
+                        // 保存 DeepSeek Key
+                        localStorage.setItem('deepseek_api_key', deepseekApiKey);
+
+                        // 保存服务器
                         const serverName = panelUrl.split('//')[1]?.split(':')[0] || '服务器';
                         const server = { name: serverName, url: panelUrl, apiKey: btApiKey };
 
@@ -357,10 +418,13 @@
                         renderServers();
                         selectServer(existingIndex >= 0 ? existingIndex : servers.length - 1);
 
-                        showToast('连接成功！', 'success');
+                        showToast('配置成功！', 'success');
                         closeSettings();
+
+                        // 自动获取状态
+                        refreshStatus();
                     } else {
-                        showToast('连接失败: ' + result.message, 'error');
+                        showToast('宝塔连接失败: ' + result.message, 'error');
                     }
                 } catch (error) {
                     showToast('连接失败: ' + error.message, 'error');

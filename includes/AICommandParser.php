@@ -453,8 +453,7 @@ class AICommandParser {
                     $size = $partition['size'] ?? [];
                     $inodes = $partition['inodes'] ?? [];
                     $message .= "📍 **{$partition['path']}**\n";
-                    $message .= "- 容量: {$size[0]} (已用 {$size[1]}, 可用 {$size[2]}, {$size[3]})\n";
-                    $message .= "- Inode: {$inodes[0]} (已用 {$inodes[1]}, 可用 {$inodes[2]}, {$inodes[3]})\n\n";
+                    $message .= "- 容量: {$size[0]} (已用 {$size[1]}, 可用 {$size[2]}, {$size[3]})\n\n";
                 }
             }
         } else {
@@ -612,5 +611,21 @@ class AICommandParser {
             $i++;
         }
         return round($bytes, 2) . ' ' . $units[$i];
+    }
+
+    public function extractCommands($text) {
+        $commands = [];
+
+        preg_match_all('/执行命令[:：]\s*(.+?)(?=[\n\r]|$)/i', $text, $matches);
+        foreach ($matches[1] as $cmd) {
+            $commands[] = trim($cmd);
+        }
+
+        preg_match_all('/shell[:：]\s*(.+?)(?=[\n\r]|$)/i', $text, $matches);
+        foreach ($matches[1] as $cmd) {
+            $commands[] = trim($cmd);
+        }
+
+        return array_unique($commands);
     }
 }
