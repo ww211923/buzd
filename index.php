@@ -383,8 +383,8 @@
                     <input type="password" id="btApiKey" placeholder="在宝塔面板设置中获取">
                 </div>
                 <div class="form-group">
-                    <label for="btApiSecret">API Secret</label>
-                    <input type="password" id="btApiSecret" placeholder="API 密钥">
+                    <label for="btApiSecret">API Secret <span style="color: #999; font-weight: normal;">(可选)</span></label>
+                    <input type="password" id="btApiSecret" placeholder="可不填">
                 </div>
                 <button id="testConnection" class="btn-save" onclick="testBtConnection()">🔗 测试连接</button>
                 <button id="addServer" class="btn-save" onclick="saveServer()" style="background: #28a745;">➕ 添加服务器</button>

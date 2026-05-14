@@ -4,27 +4,38 @@ class BaoTaAPI {
     private $api_key;
     private $api_secret;
     private $cookies = [];
+    private $last_error;
 
-    public function __construct($panel_url, $api_key, $api_secret) {
+    public function __construct($panel_url, $api_key, $api_secret = '') {
         $this->panel_url = rtrim($panel_url, '/');
         $this->api_key = $api_key;
         $this->api_secret = $api_secret;
     }
 
-    private function generateToken() {
+    private function generateAuth() {
         $time = time();
-        $token = md5($time . md5($this->api_secret));
-        return ['time' => $time, 'token' => $token];
+
+        if (empty($this->api_secret)) {
+            return [
+                'time' => $time,
+                'token' => md5($time . md5($this->api_key))
+            ];
+        }
+
+        return [
+            'time' => $time,
+            'token' => md5($time . md5($this->api_secret))
+        ];
     }
 
     private function makeRequest($action, $data = [], $method = 'POST') {
-        $auth = $this->generateToken();
+        $auth = $this->generateAuth();
         $url = $this->panel_url . $action;
 
-        $headers = [
-            'Content-Type: application/json',
-            'X-Requested-With: XMLHttpRequest'
-        ];
+        $post_data = array_merge($data, [
+            'request_time' => $auth['time'],
+            'request_token' => $auth['token']
+        ]);
 
         $ch = curl_init();
         curl_setopt_array($ch, [
@@ -34,34 +45,42 @@ class BaoTaAPI {
             CURLOPT_SSL_VERIFYPEER => false,
             CURLOPT_SSL_VERIFYHOST => false,
             CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_HTTPHEADER => $headers
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'X-Requested-With: XMLHttpRequest'
+            ]
         ]);
 
-        if (!empty($data)) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        if (!empty($post_data)) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($post_data));
         }
 
         if (!empty($this->cookies)) {
             curl_setopt($ch, CURLOPT_COOKIE, implode('; ', $this->cookies));
         }
 
-        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(array_merge($data, [
-            'request_time' => $auth['time'],
-            'request_token' => $auth['token']
-        ])));
-
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
 
-        if (curl_errno($ch)) {
+        if ($curl_error) {
             curl_close($ch);
-            return ['code' => 500, 'msg' => curl_error($ch)];
+            $this->last_error = $curl_error;
+            return ['code' => 500, 'msg' => $curl_error];
         }
 
         curl_close($ch);
 
         $result = json_decode($response, true);
         return $result ?: ['code' => $http_code, 'msg' => $response];
+    }
+
+    public function getLastError() {
+        return $this->last_error;
+    }
+
+    public function getPanelInfo() {
+        return $this->makeRequest('/panel?action=GetPanelInfo', [], 'POST');
     }
 
     public function getSystemTotal() {
@@ -195,8 +214,25 @@ class BaoTaAPI {
         return $this->makeRequest('/docker?action=get_images', [], 'GET');
     }
 
-    public function getPanelInfo() {
-        return $this->makeRequest('/panel?action=GetPanelInfo', [], 'POST');
+    public function testConnection() {
+        $result = $this->getPanelInfo();
+        if (isset($result['code']) && $result['code'] === 1) {
+            return true;
+        }
+
+        $result = $this->getSystemTotal();
+        return isset($result['cpuRealUsed']);
+    }
+
+    public function getAllInfo() {
+        return [
+            'system' => $this->getSystemTotal(),
+            'disk' => $this->getDiskInfo(),
+            'network' => $this->getNetwork(),
+            'sites' => $this->getSites(),
+            'databases' => $this->getDatabaseList(),
+            'php_versions' => $this->getPhpVersion()
+        ];
     }
 
     private function generatePassword($length = 16) {
@@ -208,26 +244,7 @@ class BaoTaAPI {
         return $password;
     }
 
-    public function testConnection() {
-        $result = $this->getPanelInfo();
-        return isset($result['code']) && $result['code'] === 1;
-    }
-
-    public function getAllInfo() {
-        $system = $this->getSystemTotal();
-        $disk = $this->getDiskInfo();
-        $network = $this->getNetwork();
-        $sites = $this->getSites();
-        $databases = $this->getDatabaseList();
-        $php_versions = $this->getPhpVersion();
-
-        return [
-            'system' => $system,
-            'disk' => $disk,
-            'network' => $network,
-            'sites' => $sites,
-            'databases' => $databases,
-            'php_versions' => $php_versions
-        ];
+    public function makeCustomRequest($action, $data = []) {
+        return $this->makeRequest($action, $data);
     }
 }
